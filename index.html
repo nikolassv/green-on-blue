@@ -1,0 +1,258 @@
+<html>
+	<head>
+		<style>
+			body {
+				background-color: darkblue;
+				color: greenyellow;
+				font-size: 18px;
+			}
+			
+			.wrapper {
+				display: flex;
+				align-items: center;
+				justify-content: center;				
+				height: 100%;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="wrapper">
+			<pre id="field"><span id="testChar">X</span></pre>
+		</div>
+		
+		<script>
+			const tc = document.getElementById("testChar");
+			const charWidth = tc.offsetWidth;
+			const charHeight = tc.offsetHeight;
+			
+			const up = 1;
+			const right = 2;
+			const down = 4;
+			const left = 8;
+			
+			const intervalDuration = 150;
+			const propability = 0.5;
+			
+			let changeInterval;
+						
+			init(propability)
+						
+			function init(propability) {
+				window.clearInterval(changeInterval);
+				
+				let width;				
+				let height;
+				[width, height] = getFieldDimensions();			
+				
+				const field = createInitialField(width, height, propability);				
+				removeLooseEnds(field, width - 1, height - 1);
+				showField(field);
+				
+				changeInterval = window.setInterval(() => {
+					let x, y;
+					[x, y] = getRandomPoint(width, height);
+					removeAny(field, x, y);
+					[x, y] = getRandomPoint(width, height);
+					addAny(field, x, y);
+					showField(field);
+				}, intervalDuration);
+			}
+			
+			function getRandomPoint(width, height) {
+				let x = Math.floor(Math.random() * (width - 1));
+				let y = Math.floor(Math.random() * (height - 1));
+				return [x, y];
+			}
+		
+			function createInitialField(width, height, propability) {
+				const field = [];
+				let upperNeighbour;
+				let leftNeighbour;
+				
+				let hasUpConnection;
+				let hasLeftConnection;
+				let hasDownConnection;
+				let hasRightConnection;
+				
+				for (let y = 0; y < height; y++) {
+					field[y] = [];
+					
+					for (let x = 0; x < width; x++) {
+						leftNeighbour = (x > 0) ? field[y][x - 1] : 0;
+						upperNeighbour = (y > 0) ? field[y - 1][x] : 0;
+						
+						hasUpConnection = !!(upperNeighbour & down);
+						hasLeftConnection = !!(leftNeighbour & right);
+						
+						if (x == width - 1) {
+							hasRightConnection = false;
+						} else {
+							hasRightConnection = propably(propability);
+						}
+						
+						if (y == height - 1) {
+							hasDownConnection = false;
+						} else {
+							hasDownConnection = propably(propability);
+						}
+						
+						if ((hasUpConnection != hasLeftConnection) && !(hasDownConnection || hasRightConnection) && !(x == width - 1 && y == height - 1)) {
+							if (y == height - 1) {
+								hasRightConnection = true;
+							} else if (x == width - 1) {
+								hasDownConnection = true;
+							} else if (propably(propability)) {
+								hasDownConnection = true;
+							} else {
+								hasRightConnection = true;
+							}
+						}
+						
+						if (!(hasUpConnection || hasLeftConnection) && (hasDownConnection != hasRightConnection)) {
+							hasRightConnection = false;
+							hasDownConnection = false;
+						}
+						
+						field[y][x] = (hasUpConnection ? up : 0) + (hasRightConnection ? right : 0) + (hasDownConnection ? down : 0) + (hasLeftConnection ? left : 0);
+					}					
+				}
+				
+				return field;
+			}
+			
+			function removeAny(field, x, y) {
+				const dir = getRandomPossibleDirection(x, y, field);
+				let nX, nY;
+				
+				if (field[y][x] & dir) {
+					field[y][x] = field[y][x] & ~dir;
+					removeLooseEnds(field, x, y);
+					
+					[nX, nY] = getPointInDirection(x, y, dir);
+					field[nY][nX] = field[nY][nX] & ~getOppositeDirection(dir);
+					removeLooseEnds(field, nX, nY);
+				}
+			}
+			
+			function addAny(field, x, y) {
+				const dir = getRandomPossibleDirection(x, y, field);
+				let nX, nY;
+				
+				if (!(field[y][x] & dir)) {
+					field[y][x] = field[y][x] | dir;
+					continueLostEnds(field, x, y);
+					
+					[nX, nY] = getPointInDirection(x, y, dir);
+					field[nY][nX] = field[nY][nX] | getOppositeDirection(dir);
+					continueLostEnds(field, nX, nY);
+				}
+			}
+			
+			function continueLostEnds(field, x, y) {
+				let nX, nY;
+				let dir;
+				
+				while (hasLessThanTwoConnections(field[y][x])) {
+					dir = getNewDirection(x, y, field);
+					[nX, nY] = getPointInDirection(x, y, dir);
+					
+					field[y][x] = field[y][x] | dir;
+					field[nY][nX] = field[nY][nX] | getOppositeDirection(dir);
+					
+					[x, y] = [nX, nY];
+				}
+				
+			}			
+						
+			function removeLooseEnds(field, x, y) {
+				let nX, nY;
+				let dir;
+				
+				while (field[y][x] != 0 && hasLessThanTwoConnections(field[y][x])) {
+					dir = field[y][x];					
+					field[y][x] = 0;
+					
+					[nX, nY] = getPointInDirection(x, y, dir);
+					field[nY][nX] = field[nY][nX] & ~getOppositeDirection(dir);	
+					
+					[x, y] = [nX, nY];
+				}
+			}
+
+			function hasLessThanTwoConnections(current) {
+				return [0,1,2,4,8].indexOf(current) != -1;
+			}
+			
+			function getNewDirection(x, y, field) {
+				const current = field[y][x];
+				let dir;
+				do {
+					dir = getRandomPossibleDirection(x, y, field);
+				} while (current & dir);
+				return dir;
+			}
+			
+			function getRandomPossibleDirection(x, y, field) {
+				let dir;
+				do {
+					dir = Math.pow(2, Math.floor(Math.random() * 4));
+				} while (!isDirPossible(x, y, field[0].length, field.length, dir));
+				return dir;
+			}
+			
+			function field2String(field) {
+				const symbols = [' ', '1', '2', '╚', '4', '║', '╔', '╠', '8', '╝', '═', '╩', '╗', '╣', '╦', '╬'];
+				let str = '';
+				
+				for (let y = 0; y < field.length; y++) {
+					for (let x = 0; x < field[0].length; x++) {
+						str += symbols[field[y][x]];
+					}
+					str += '\n';
+				}
+				
+				return str;
+			}
+			
+			function showField(field) {
+				const str = field2String(field);
+				document.getElementById('field').innerText = str;	
+			}
+
+			function propably(propability) {
+				return Math.random() < propability;
+			}
+			
+			function getFieldDimensions() {
+				const maxWidth = window.innerWidth * 0.7;
+				const maxHeight = window.innerHeight * 0.7;
+				
+				return [Math.floor(maxWidth / charWidth), Math.floor(maxHeight / charHeight)];
+			}
+			
+			function getPointInDirection(x, y, dir) {
+				switch (dir) {
+					case up: return [x, y - 1];
+					case right: return [x + 1, y];
+					case down: return [x, y + 1];
+					case left: return [x -1, y];
+				}
+			}
+			
+			function isDirPossible(x, y, maxX, maxY, dir) {
+				let nX, nY;				
+				[nX, nY] = getPointInDirection(x, y, dir);				
+				return nX > -1 && nX < maxX && nY > -1 && nY < maxY;
+			}
+			
+			function getOppositeDirection(dir) {
+				switch (dir) {
+					case up: return down;
+					case right: return left;
+					case down: return up;
+					case left: return right;
+				}
+			}
+		</script>
+	</body>
+</html>
